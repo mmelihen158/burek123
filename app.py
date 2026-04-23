@@ -5,7 +5,6 @@ import os
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 
-
 # ---------------------------
 # LOAD WORDS
 # ---------------------------
@@ -13,9 +12,7 @@ def load_words(filename):
     with open(filename, "r", encoding="utf-8") as f:
         return [w.strip().lower() for w in f if len(w.strip()) == 5]
 
-
 all_words = load_words("koncnebesede.txt")
-
 
 # ---------------------------
 # FILTER
@@ -47,7 +44,6 @@ def filter_words(words, guess, result):
 
     return new_words
 
-
 # ---------------------------
 # SCORING
 # ---------------------------
@@ -57,9 +53,7 @@ def compute_global_frequency(all_words):
         counter.update(set(w))
     return counter
 
-
 freq = compute_global_frequency(all_words)
-
 
 def score_word(word, freq, penalty=0.5):
     counts = Counter(word)
@@ -74,12 +68,10 @@ def score_word(word, freq, penalty=0.5):
 
     return score
 
-
 def best_10_words(candidates, freq):
     scored = [(w, score_word(w, freq)) for w in candidates]
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:10]
-
 
 # ---------------------------
 # HTML
@@ -159,24 +151,26 @@ HTML = """
 </html>
 """
 
-
 # ---------------------------
 # ROUTES
 # ---------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
-    if "moznosti" not in session:
-        session["moznosti"] = all_words.copy()
+    history = session.get("history", [])
 
     if request.method == "POST":
         guess = request.form["guess"].lower()
         result = request.form["result"].lower()
 
         if len(guess) == 5 and len(result) == 5:
-            session["moznosti"] = filter_words(session["moznosti"], guess, result)
-            session.modified = True
+            history.append((guess, result))
+            session["history"] = history
 
-    moznosti = session["moznosti"]
+    # recompute from history
+    moznosti = all_words.copy()
+    for guess, result in history:
+        moznosti = filter_words(moznosti, guess, result)
+
     top10 = best_10_words(moznosti, freq)
 
     return render_template_string(
@@ -186,13 +180,10 @@ def index():
         words=moznosti[:20]
     )
 
-
 @app.route("/reset", methods=["POST"])
 def reset():
-    session.pop("moznosti", None)
-    session.modified = True
+    session["history"] = []
     return redirect(url_for("index"))
-
 
 # ---------------------------
 # RUN
